@@ -280,7 +280,13 @@ impl Poolable for memcache::Client {
 }
 
 #[cfg(feature = "ldap_pool")]
-pub struct LDAPConnectionManager(pub String);
+///
+pub struct LDAPConnectionManager (
+    /// Connection string to LDAP with bind credentials.
+    /// It has the format `ldap://bind_dn:bind_pw@host`.
+    /// It is important that the bind_pw and the host must not contain a :
+    pub String
+);
 use ldap3::{LdapConn, LdapError};
 use ldap3::exop::WhoAmI;
 
@@ -289,7 +295,28 @@ impl ManageConnection for LDAPConnectionManager {
     type Error = LdapError;
 
     fn connect(&self) -> Result<LdapConn, LdapError> {
-        LdapConn::new(&*self.0)
+        let bind_dn_start_bytes = self.0.find("ldap://").unwrap() + 7;
+        let bind_dn_end_bytes = self.0.rfind(":").unwrap();
+        let bind_dn = &self.0[bind_dn_start_bytes..bind_dn_end_bytes];
+
+        let bind_pw_start_bytes = bind_dn_end_bytes + 1;
+        let bind_pw_end_bytes = self.0.rfind("@").unwrap();
+        let bind_pw = &self.0[bind_pw_start_bytes..bind_pw_end_bytes];
+
+        let bind_host = &self.0[(bind_pw_end_bytes + 1)..(self.0.len())];
+
+        match LdapConn::new(&*format!("ldap://{}", bind_host)) {
+            Ok(mut conn) => {
+                match conn.simple_bind(bind_dn, bind_pw) {
+                    Ok(res) => match res.success() {
+                        Ok(_) => Ok(conn),
+                        Err(err) => Err(err)
+                    }
+                    Err(err) => Err(err)
+                }
+            }
+            Err(err) => Err(err)
+        }
     }
     fn is_valid(&self, conn: &mut LdapConn) -> Result<(), LdapError> {
         conn.extended(WhoAmI).map(|_| ())
