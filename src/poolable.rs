@@ -1,9 +1,8 @@
-use std::time::Duration;
-
 use r2d2::ManageConnection;
 use rocket::{Rocket, Build};
 
 #[allow(unused_imports)]
+use std::time::Duration;
 use crate::{Config, Error};
 
 /// Trait implemented by `r2d2`-based database adapters.
@@ -322,7 +321,7 @@ impl ManageConnection for LDAPConnectionManager {
         conn.extended(WhoAmI).map(|_| ())
     }
     fn has_broken(&self, conn: &mut LdapConn) -> bool {
-        conn.extended(WhoAmI).is_err()
+        conn.extended(WhoAmI).is_err() // TODO: Fix warning when unbinded
     }
 }
 
